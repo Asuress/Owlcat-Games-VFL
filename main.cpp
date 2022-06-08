@@ -127,6 +127,7 @@ namespace TestTask
 			}
 
 			std::lock_guard<std::mutex> guard(mtx);
+			f->fstream->seekg(0);
 			auto initPos = f->fstream->tellg();
 			f->fstream->read(buff, len);
 			auto postPos = f->fstream->tellg();
@@ -141,7 +142,7 @@ namespace TestTask
 			}
 
 			std::lock_guard<std::mutex> guard(mtx);
-			auto initPos = f->fstream->tellp();
+			auto initPos = f->fstream->seekp(f->fstream->gcount(), f->fstream->end).tellp();
 			auto postPos = f->fstream->write(buff, len).tellp();
 			return postPos - initPos;
 		}; // Записать данные в файл. Возвращаемое значение - сколько реально байт удалось записать
@@ -159,7 +160,6 @@ namespace TestTask
 				{
 					if ((*i)->fileName == f->fileName)
 					{
-						delete *i;
 						break;
 					}
 				}
@@ -174,16 +174,21 @@ namespace TestTask
 //1. Возможна ситуация, когда есть одновременно открытые readonly и writeonly файлы(разные).
 //2. Не забудьте про многопоточность.Работа с вашей системой возможна из нескольких потоков одновременно.
 
-int main() {
+TestTask::File* f;
+TestTask::IVFS ivfs;
+
+void multithread_test();
+
+int main() { // провел некоторые тесты работоспособности...
 	// test create_directory
 	// протестить create()
-	/*TestTask::IVFS ivfs;
+	//TestTask::IVFS ivfs;
 	char* buff = new char[6]{'\0'};
 	std::cout << buff << std::endl;
 
 	const char* name = "a/b/test/a.txt";
 
-	auto f = ivfs.Create(name);
+	/*auto f = ivfs.Create(name);
 	std::cout << ivfs.Write(f, (char*)"test", 5) << std::endl;
 	ivfs.Close(f);
 
@@ -193,11 +198,27 @@ int main() {
 	std::cout << buff << std::endl;
 	ivfs.Close(f);*/
 
-	std::thread th1;
+	f = ivfs.Create(name);
 
+	std::thread th2(multithread_test);
 
+	auto c = ivfs.Write(f, (char*)"test ", 5);
+	std::cout << "main thread" << '\t' << c << '\t' << buff << std::endl;
 
-	th1.join();
+	th2.join();
+
+	ivfs.Close(f);
 
 	return 0;
+}
+
+void multithread_test() {
+	char* buff = new char[11]{ '\0' };
+	auto c1 = ivfs.Write(f, (char*)"test ", 5);
+	auto name = f->fileName;
+	ivfs.Close(f);
+	auto f2 = ivfs.Open(name);
+	auto c2 = ivfs.Read(f2, buff, 10);
+	std::cout << "sec thread" << '\t' << c1 << '\t' << c2 << '\t' << buff << std::endl;
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
